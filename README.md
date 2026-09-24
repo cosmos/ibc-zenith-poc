@@ -6,8 +6,9 @@ burned on Besu and minted on Zenith, carried by our own attestors and relayer,
 using the `ibc` CLI with no changes to any contract.
 
 **What this proves:** the IBC Solidity stack — ICS26 router, attestation light
-client, GMP, IFT — deploys and runs unmodified on Canton's EVM layer, and packet
-delivery there settles through Canton consensus.
+client, GMP, IFT — deploys and runs unmodified on Canton's EVM layer; tokens
+move in **both directions**; and packet delivery there settles through Canton
+consensus.
 
 **What this does not prove:** that IBC reaches Canton. The assets institutions
 hold on Canton (JPM Coin, DTCC's tokenized Treasuries, anything CIP-56) are Daml
@@ -45,9 +46,22 @@ set, not a production one.
 The layer below is what makes Zenith more than an ordinary EVM chain. Every
 Zenith block is wrapped by Zenith's relayer into a Canton transaction under the
 Daml template `Zenith.Evm.Rules:BlockProposal` and re-executed by three Canton
-participants. Our packet delivery inherits that: the receive transaction has an
-originating Canton transaction, visible in the explorer. See
-[RESULTS.md](RESULTS.md).
+participants. Our packet delivery inherits that:
+
+![Zenith explorer showing our IBC packet-delivery transaction with its
+originating Canton transaction: Daml template Zenith.Evm.Rules:BlockProposal,
+Canton update id, command id, and a lifecycle of three participants executing
+and re-executing](docs/img/canton-linkage.png)
+
+*The IBC `recvPacket` that minted 10 ZPOC on Zenith
+([tx `0xeb0417e1…a397124c`](https://explorer.testnet.zenith.network/tx/0xeb0417e13abbfe9549d6de3ed9ceb4caf0432e2666cdbb1bf36d9853a397124c)),
+shown with the Canton transaction it originated from. Regenerate with
+`make screenshot`.*
+
+Read that panel precisely. The Daml template is `BlockProposal`: Zenith wraps an
+EVM **block** into a Canton transaction, and our packet delivery is one
+transaction inside it. Our IBC packet is not itself a Daml contract. The
+per-step timings are labelled illustrative by the page itself.
 
 ## Run it
 
@@ -67,12 +81,11 @@ Also available: `make status` (what is running, balances on both chains),
 `make logs` (tail the relayer), `make clean` (full reset, including this PoC's
 IBC home).
 
-Expected finish:
+Expected finish: a packet out and a packet back.
 
 ```
-ok  packet SUCCEEDED
-    Besu 41003: 90.0 ZPOC
-    Zenith 936485: 10.0 ZPOC
+ok  packet SUCCEEDED                 # Besu -> Zenith, auto-relayed
+ok  return packet SUCCEEDED — full round trip   # Zenith -> Besu, relayed by hand
 ```
 
 ## Isolation
@@ -94,19 +107,23 @@ hardcoded.
 
 ## Known limits
 
-**The return leg does not auto-relay.** Zenith publishes no public WebSocket —
-`ws.testnet.zenith.network` does not resolve and the RPC host rejects the
-upgrade. The relayer subscribes over a WebSocket to source auto-relayed
-packets, and `config validate` fails outright if `autoRelay` is enabled on a
-chain without one, so it is enabled on the Besu end only. Besu → Zenith is
-automatic; Zenith → Besu is not.
+**The return leg needs one extra command.** Zenith publishes no public
+WebSocket — `ws.testnet.zenith.network` does not resolve and the RPC host
+rejects the upgrade. The relayer subscribes over a WebSocket to *discover*
+packets automatically, and `config validate` fails outright if `autoRelay` is
+enabled on a chain without one, so it is on the Besu end only.
 
-**A Zenith → Besu send strands its tokens.** `make demo` attempts the return
-leg, and the send succeeds and burns on Zenith — but with nothing watching that
-end, the packet is never carried and the timeout/refund path is not carried
-either. Those tokens do not come back on their own. This is a property of the
-demo's configuration, not of IBC; a relayer with a Zenith WebSocket, or a
-manual submission, would complete it.
+That costs automation, not capability. `ibc relayer relay --chain-id 936485
+--tx-hash <send>` names the source transaction explicitly, and the same
+pipeline carries the packet. `make demo` does this and completes the round
+trip. A Zenith WebSocket would remove the extra call; nothing else is missing.
+
+**Relay the return leg promptly.** A packet's timeout defaults to 15 minutes
+from the send. Relayed inside that window it delivers; relayed after it, the
+same command carries a timeout instead and refunds the tokens on the source
+chain. Both paths were exercised here — see [RESULTS.md](RESULTS.md). Tokens
+are never lost, but a send that is never relayed at all stays burned until
+someone runs the command.
 
 **Everything is a demo trust set.** One attestor per chain, threshold 1, keys
 generated locally with no ceremony, and a single-validator Besu chain. Read the
@@ -118,25 +135,11 @@ this as reproducible on demand, not as a demo that stays live.
 
 ## Reaching Canton
 
-The obvious next question is whether the same handler can reach a real Daml
-asset. It cannot, as built, and the reason is directional.
-
-Zenith's `external_call()` is implemented **in Daml** and lets Daml contracts
-invoke the EVM — not the reverse. There is no outbound door from the EVM side: a
-Solidity contract on Zenith cannot call into Daml. So:
-
-- **Canton → Besu** is the clean direction. A Daml contract could burn a CIP-56
-  token and `external_call()` our Solidity handler to emit the packet,
-  atomically, in one Canton transaction.
-- **Besu → Canton** is the hard one. The packet lands on Zenith EVM and nothing
-  there can mint the Daml token. The relayer would have to submit a Canton
-  transaction itself, against a participant node.
-
-That second point is the same conclusion reached independently from the
-protocol side: the IBC component has to speak the Canton protocol rather than
-fetch headers and proofs over RPC. Closing the gap needs Daml templates on
-CIP-56, a stakeholder design that lets the relayer or attestor read packet
-commitments, and a relayer adapter for the participant ledger API.
+`external_call()` runs Daml → EVM only, so a Solidity contract on Zenith cannot
+call into Daml: reaching a CIP-56 asset needs Daml templates plus a relayer that
+speaks the Canton ledger API.
+See the [design doc](docs/2026-09-24-besu-zenith-ibc-design.md#reaching-canton)
+for what that would take.
 
 ## Layout
 
@@ -153,6 +156,7 @@ scripts/
   relayer.sh             start | stop | status
   transfer.sh            mint, send, wait, report; then the return leg
   status.sh              what is running and where the tokens are
-docs/                    design spec and measured Zenith facts
+  screenshot.sh          re-capture the Canton linkage image (make screenshot)
+docs/                    design spec, measured Zenith facts, img/
 RESULTS.md               the run: transaction hashes, balances, Canton linkage
 ```

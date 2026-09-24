@@ -8,7 +8,7 @@
 SHELL := /bin/bash
 S     := scripts
 
-.PHONY: help up fund demo deploy configure relayer transfer status logs down clean
+.PHONY: help up fund demo deploy configure relayer transfer status logs screenshot down clean
 
 help:
 	@echo "make up      start local Besu and fund the Zenith accounts"
@@ -46,6 +46,10 @@ status:
 
 logs:
 	@tail -f logs/relayer.log
+
+# Re-capture the Canton linkage image used in the README.
+screenshot:
+	@bash $(S)/screenshot.sh
 
 down:
 	@bash $(S)/relayer.sh stop

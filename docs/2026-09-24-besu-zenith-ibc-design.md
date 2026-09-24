@@ -183,3 +183,40 @@ Corrections to this spec, from the build:
   `make demo` can be re-run safely. Not known when the spec was written.
 
 Evidence: [RESULTS.md](../RESULTS.md).
+
+## Reaching Canton
+
+Moved here from the README, and updated with what the primary sources say.
+
+**The direction is Daml → EVM, verified three ways.** CIP-0091 (Canton
+Foundation, approved 2025-11-04): "`external_call()` function: Allows Canton
+contracts to call a deterministic external, locally running service and receive
+results from it." The Daml-LF 2 language spec in `digital-asset/canton` defines
+the builtin as `EXTERNAL_CALL : Text → Text → Text → Text → Update Text`
+— extension id, function id, config hash, hex input payload, returning a hex
+output payload — available in LF ≥ 2.4. And the implementation is merged: 25
+files across the daml-lf interpreter and engine, participant protocol
+validation, protocol v32 protobuf, the ledger API, with integration and
+tampering tests.
+
+There is no inbound counterpart. A Solidity contract on Zenith cannot call into
+Daml. So the two directions are not symmetric:
+
+- **Canton → Besu** is the clean one. A Daml contract burns a CIP-56 token and
+  `external_call()`s our Solidity handler to emit the packet, atomically, inside
+  one Canton transaction.
+- **Besu → Canton** is the hard one. The packet lands on Zenith EVM and nothing
+  there can mint the Daml token. The relayer has to submit a Canton transaction
+  itself, against a participant node — the same conclusion Eric's spike reached
+  from the protocol side.
+
+**What closing the gap needs:** Daml templates against CIP-56, a stakeholder
+design that lets the relayer or attestor read packet commitments (a Daml
+contract exists only on its stakeholders' participants), and a relayer adapter
+for the participant ledger API.
+
+**Status of the dependency.** `external_call()` is merged upstream and reported
+as scheduled for Canton 3.6. The latest Canton release is 3.5.19 (2026-09-23),
+so it is close but not shipped to MainNet. Unresolved: whether LF 2.4 is stable
+or still dev-gated in 3.5.x, which decides whether any of this is exercisable on
+a Canton test network today.

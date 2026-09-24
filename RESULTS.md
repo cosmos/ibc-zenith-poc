@@ -53,17 +53,38 @@ correlates the two. The explorer also labels its timing breakdown an
 "illustrative visualization" with estimated per-step durations, so treat the
 5.3s lifecycle figure as indicative.
 
-## Return leg: attempted, did not complete
+## Return leg: completed, with one manual step
 
-Zenith → Besu was in scope as best-effort only, because Zenith publishes no
-public WebSocket and the relayer needs one to source auto-relayed packets.
+Zenith → Besu was scoped as best-effort because Zenith publishes no public
+WebSocket. It turned out to work, and the limitation is narrower than expected.
 
-The send succeeded on Zenith — tx
-`0xe39af1b5c2bc941465083aff8d4f19e6c9e4efcf87c3bf49c69a0e040d6de91b`, block
-576051 — and burned 1 ZPOC, taking the Zenith balance from 10 to 9. The packet
-then reported `UNKNOWN`: nothing was watching that end to carry it, and nothing
-carried the timeout home either. Those tokens are stranded by the demo's
-configuration. IBC behaved correctly; the relayer was simply not subscribed.
+The WebSocket drives *automatic discovery* of outbound packets. It is not
+required to carry one. `ibc relayer relay --chain-id 936485 --tx-hash <send>`
+names the source transaction explicitly, and the relayer builds the same
+pipeline it would have built from a subscription.
+
+**Delivery, relayed promptly** — 2 ZPOC, Zenith → Besu:
+
+| Leg | Chain | Transaction |
+|---|---|---|
+| send | Zenith 936485 | `0x6fe697a127eefac80774ae3710fb3d5e4b152e0e43a408485bb6e41967976bc1` |
+| recv | Besu 41003 | `0x5e5f10c646742194cfbee7c0a9583e71bcb1bc02a447ae3abf3276002be462ff` |
+| ack | Zenith 936485 | `0x18b2b281891b5390ea4c750b9eecf3ae5cb655701472cfdc9f5d639a0e0a77b5` |
+
+`PACKET_STATE_SUCCEEDED`, sequence 3. Supplies afterwards: Besu 182, Zenith 17,
+verified by raw `totalSupply()` calls on both chains.
+
+**Timeout and refund, relayed late.** The first run's stranded 1 ZPOC was
+relayed about 13 minutes after its send, past the 15-minute default timeout. The
+relayer carried a timeout instead of a delivery — `COMPLETE_WITH_TIMEOUT` — and
+refunded on the source chain: tx
+`0xe94a0919b0b2f2f1e9c039cdecde445952256ed829a60691ef9b98f7c8589c37` on Zenith
+minted 1 ZPOC back from the zero address, taking Zenith from 18 to 19.
+
+So both halves of the packet lifecycle work over this connection, in both
+directions. What the missing WebSocket costs is the automatic trigger, not the
+delivery. A send that nobody ever relays stays burned until someone runs the
+command; nothing is unrecoverable.
 
 ## Measured facts about Zenith
 
@@ -107,11 +128,9 @@ packet went through.
 | recv | Zenith 936485 | `0x54887c663565131f4b3046dadb6440f526edb781db1b20061f8a8038e147f1f2` |
 | ack | Besu 41003 | `0x888494733ab8f004516d3ddcfc660733983e625bea2e0c83e96b6f55fe66dbf3` |
 
-`PACKET_STATE_SUCCEEDED`, sequence 2. The return leg was attempted again and
-again stranded 1 ZPOC on Zenith, consistent with the first run.
+`PACKET_STATE_SUCCEEDED`, sequence 2.
 
-Final balances after two runs: Besu 180 ZPOC, Zenith 18 ZPOC (200 minted, 20
-transferred in, 2 burned into stranded return packets).
+Final supplies after all runs, by raw `totalSupply()`: Besu 182, Zenith 17.
 
 ## Reproducing
 
