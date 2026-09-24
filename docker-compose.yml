@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# One single-validator Besu QBFT chain: the local half of the Besu <-> Zenith
+# IBC PoC.
+#
+# Deliberately isolated from the ibc-dogfood besu-to-besu example, which may be
+# running on this machine under another agent:
+#   - container name  besu-zpoc   (not besu-a / besu-b)
+#   - host ports      8945/8946/9945  (not 8545 / 8745)
+#   - own network and volume
+# Nothing here touches that example's containers.
+#
+# DEMO KEYS ONLY: the validator key mounted at /evm is generated locally by
+# scripts/setup-besu.sh into chains/local/, which is gitignored. Local devnet
+# use only.
+
+services:
+  besu-zpoc:
+    image: ${BESU_IMAGE:-hyperledger/besu:25.4.0}
+    container_name: besu-zpoc
+    command:
+      - "--config-file=/evm/besu.toml"
+      - "--metrics-enabled"
+      - "--metrics-host=0.0.0.0"
+      - "--metrics-port=9545"
+      - "--Xqbft-enable-early-round-change"
+    # Loopback only. The JSON-RPC endpoint is unauthenticated and the node holds
+    # the key that signs every block on this chain, so it stays off the LAN.
+    ports:
+      - "127.0.0.1:8945:8545"
+      - "127.0.0.1:8946:8546"
+      - "127.0.0.1:9945:9545"
+    volumes:
+      - besu-zpoc-data:/data
+      - ./chains/local:/evm:ro
+    networks: [ zpoc-net ]
+    restart: on-failure
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8545" ]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+volumes:
+  besu-zpoc-data:
+
+networks:
+  zpoc-net:
+    driver: bridge
