@@ -85,9 +85,10 @@ and balances of Besu 90 / Zenith 10 ZPOC. The PoC keeps running afterwards.
 
 ### The demo UI
 
-![The demo UI mid-transfer: Besu on the left, Zenith on the right, the relayer
-between them, the packet arriving at IBC Core on Zenith, and the live log in the
-bottom-left corner](docs/img/demo-ui.png)
+![The demo UI at step 2 of a live transfer: Besu on the left, Canton EVM on the
+right, balances and IBC in the top bar, the relayer and attestor sets in the
+middle, the packet moving from the IFT contract to GMP on Besu, and the live log
+in the bottom-left corner](docs/img/demo-ui.png)
 
 One transfer, step by step, built for recording: the contracts on each chain,
 the attestor sets and the relayer between them, and the packet moving
