@@ -30,7 +30,9 @@ ZENITH_WS=""
 # --- IBC CLI ------------------------------------------------------------------
 
 IBC_HOME="${IBC_HOME:-$HOME/.ibc-zpoc}"   # never ~/.ibc, which other work uses
-IBC_BIN="$REPO_DIR/bin/ibc"
+IBC_BIN="$REPO_DIR/bin/ibc"                # built by `make up` (scripts/build-ibc.sh)
+IBC_SRC_REPO="https://github.com/cosmos/ibc"
+IBC_COMMIT="21e534cfe98eaebeebb41d8907ede2adb7fd90af"   # the commit this PoC was verified against
 RELAYER_PORT=3100                          # not 3000
 
 # Wrapper: pins --home and drops the sonic/ast build warning the binary prints
@@ -58,3 +60,8 @@ say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m  !!\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m  xx\033[0m %s\n' "$*" >&2; exit 1; }
+
+# Every script needs bin/ibc. Say how to get it rather than fail obscurely.
+if [[ ! -x "$IBC_BIN" && -z "${ZPOC_NO_IBC_CHECK:-}" ]]; then
+  die "the ibc CLI is not built yet ($IBC_BIN). Run: make up"
+fi

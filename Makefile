@@ -11,7 +11,7 @@ S     := scripts
 .PHONY: help up fund demo deploy configure relayer transfer return status logs screenshot ui ui-live down clean
 
 help:
-	@echo "make up      start local Besu and fund the Zenith accounts"
+	@echo "make up      check prerequisites, build the ibc CLI, start local Besu, fund Zenith"
 	@echo "make demo    deploy IBC on both chains, start the relayer, transfer a token"
 	@echo "make down    stop the local chain and the relayer"
 	@echo ""
@@ -24,8 +24,14 @@ help:
 	@echo "make ui-live demo UI driving the real PoC (http://localhost:3200/?live)"
 
 up:
+	@bash $(S)/preflight.sh
+	@bash $(S)/build-ibc.sh
 	@bash $(S)/setup-besu.sh
 	@bash $(S)/fund.sh
+
+# Build bin/ibc from cosmos/ibc at the pinned commit (make up does this too).
+ibc:
+	@bash $(S)/build-ibc.sh
 
 fund:
 	@bash $(S)/fund.sh
@@ -62,10 +68,15 @@ screenshot:
 
 # Packet-journey UI for the video. Scripted needs nothing running; live needs
 # `make up && make demo` to have succeeded.
+NODE_CHECK = command -v npm >/dev/null 2>&1 && node -e 'process.exit(+process.versions.node.split(".")[0] >= 20 ? 0 : 1)' \
+  || { echo "The demo UI needs Node 20+ and npm: https://nodejs.org"; exit 1; }
+
 ui:
+	@$(NODE_CHECK)
 	@cd demo-ui && npm install --silent && npm run dev
 
 ui-live:
+	@$(NODE_CHECK)
 	@cd demo-ui && npm install --silent && npm run build && npm run live
 
 down:

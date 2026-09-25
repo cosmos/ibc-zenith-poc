@@ -3,7 +3,7 @@
 A working IBC connection between a local Hyperledger Besu chain and **Zenith**,
 the EVM execution layer of the Canton Network. An Interchain Fungible Token is
 burned on Besu and minted on Zenith, carried by our own attestors and relayer,
-using the `ibc` CLI with no changes to any contract.
+using the [`ibc` CLI](https://github.com/cosmos/ibc) with no changes to any contract.
 
 **What's included in this demo** the IBC Solidity stack — ICS26 router, attestation light
 client, GMP, IFT — deploys and runs unmodified on Canton's EVM layer; tokens
@@ -59,20 +59,26 @@ per-step timings are labelled illustrative by the page itself.
 
 ## Run it
 
-Prerequisites: Docker with the compose plugin, Go 1.25+, Node 20+, `jq`,
-`perl`, and Foundry's `cast`.
+Prerequisites: Docker (running, with the compose plugin), Go 1.26+, Node 20+,
+`git`, `jq`, `perl`, `python3`, `curl`, and Foundry's `cast`. `make up` checks
+for all of them first and says what is missing.
 
 ```bash
-make up        # start the local Besu chain, create keys, get Zenith gas from the faucet
+make up        # check prerequisites, build the ibc CLI, start local Besu, get Zenith gas
 make demo      # deploy IBC on both chains, start the relayer, send a token
 make ui-live   # start the demo UI against the running PoC
 ```
 
 Then open <http://localhost:3200/?live>.
 
+The first `make up` builds the `ibc` CLI into `bin/ibc` from
+[cosmos/ibc](https://github.com/cosmos/ibc) at the commit this PoC was verified
+against (pinned in `scripts/env.sh`). That takes a minute or two; later runs
+skip it.
+
 ### What `make demo` does
 
-It registers both chains with the `ibc` CLI, deploys the IBC stack on each
+It registers both chains with the [`ibc` CLI](https://github.com/cosmos/ibc), deploys the IBC stack on each
 (ICS26 router, an attestation light client tracking the other chain, GMP, and
 the ZPOC IFT token), links the two tokens, and starts the relayer. Then it
 mints 100 ZPOC on Besu and sends 10 to Zenith over IBC. It finishes with:
@@ -133,6 +139,7 @@ at threshold 1. Design:
 | `make ui` | the demo UI with recorded data, <http://localhost:5173> |
 | `make down` | stop the relayer and the local chain |
 | `make up && make relayer` | bring it back after a reboot or `make down`, without redeploying |
+| `make ibc` | build `bin/ibc` on its own (`make up` does this when it is missing) |
 | `make fund` | top up ZTH gas on Zenith from the faucet |
 | `make clean` | full reset: deletes the local chain, logs, and this PoC's IBC home (`~/.ibc-zpoc`) |
 | `make screenshot` | re-capture the Canton explorer image in [Architecture](#architecture) |
@@ -196,7 +203,9 @@ Makefile                 the command surface (make help)
 docker-compose.yml       the local Besu containers
 chains/                  besu.toml + genesis templates; chains/local is generated
 scripts/
-  env.sh                 shared config: endpoints, ports, helpers
+  env.sh                 shared config: endpoints, ports, pinned ibc commit, helpers
+  preflight.sh           check prerequisites before make up
+  build-ibc.sh           build bin/ibc from cosmos/ibc at the pinned commit
   setup-besu.sh          keys, genesis, container, wait for RPC
   fund.sh                faucet top-up via POST /api/faucet
   deploy.sh              register chains, deploy core/client/gmp/ift, link tokens
