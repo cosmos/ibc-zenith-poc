@@ -5,16 +5,10 @@ the EVM execution layer of the Canton Network. An Interchain Fungible Token is
 burned on Besu and minted on Zenith, carried by our own attestors and relayer,
 using the `ibc` CLI with no changes to any contract.
 
-**What this proves:** the IBC Solidity stack — ICS26 router, attestation light
+**What's included in this demo** the IBC Solidity stack — ICS26 router, attestation light
 client, GMP, IFT — deploys and runs unmodified on Canton's EVM layer; tokens
 move in **both directions**; and packet delivery there settles through Canton
 consensus.
-
-**What this does not prove:** that IBC reaches Canton. The assets institutions
-hold on Canton (JPM Coin, DTCC's tokenized Treasuries, anything CIP-56) are Daml
-contracts on their own participant nodes. Nothing here touches Daml. See
-[Reaching Canton](#reaching-canton) for why the remaining gap is not a
-formality.
 
 ## Architecture
 
@@ -65,28 +59,96 @@ per-step timings are labelled illustrative by the page itself.
 
 ## Run it
 
-Prerequisites: Docker with the compose plugin, Go 1.25+, `jq`, `perl`, and
-Foundry's `cast`.
+Prerequisites: Docker with the compose plugin, Go 1.25+, Node 20+, `jq`,
+`perl`, and Foundry's `cast`.
 
 ```bash
-make up      # start the local Besu chain, fund the Zenith accounts from the faucet
-make demo    # deploy IBC on both chains, start the relayer, transfer a token
-make down    # stop the relayer and the local chain
+make up        # start the local Besu chain, create keys, get Zenith gas from the faucet
+make demo      # deploy IBC on both chains, start the relayer, send a token
+make ui-live   # start the demo UI against the running PoC
 ```
+
+Then open <http://localhost:3200/?live>.
+
+### What `make demo` does
+
+It registers both chains with the `ibc` CLI, deploys the IBC stack on each
+(ICS26 router, an attestation light client tracking the other chain, GMP, and
+the ZPOC IFT token), links the two tokens, and starts the relayer. Then it
+mints 100 ZPOC on Besu and sends 10 to Zenith over IBC. It finishes with:
+
+```
+ok  packet SUCCEEDED
+```
+
+and balances of Besu 90 / Zenith 10 ZPOC. The PoC keeps running afterwards.
+
+### The demo UI
+
+![The demo UI mid-transfer: Besu on the left, Zenith on the right, the relayer
+between them, the packet arriving at IBC Core on Zenith, and the live log in the
+bottom-left corner](docs/img/demo-ui.png)
+
+One transfer, step by step, built for recording: the contracts on each chain,
+the attestor sets and the relayer between them, and the packet moving
+IFT → GMP → IBC Core → relayer → IBC Core → GMP → IFT, then the ack back. Each
+step has a caption, and the top bar shows ZPOC on both chains.
+
+**Live** (`make ui-live`, <http://localhost:3200/?live>). Press `1` for
+Besu → Zenith or `2` for Zenith → Besu, then `Space` to send 10 ZPOC for real.
+The UI then plays itself as the transfer happens: each step stays up for a few
+seconds, and a step that needs the chain holds on "Waiting for…" until the
+relayer reports it. A transfer takes about a minute. The live log in the corner
+shows the commands being run and the relayer's own log as it goes. The balances
+are the real ones on chain, so they carry over between takes; a forward run
+followed by a return run brings them back to where they started.
+
+**Recorded** (`make ui`, <http://localhost:5173>). The same screens, stepped
+through by hand with `Space`, using the real transactions from
+[RESULTS.md](RESULTS.md). It needs no chains, never waits, and cannot fail
+mid-take.
+
+| Key | |
+|---|---|
+| `1` / `2` | forward or return journey (ready screen) |
+| `Space` / `→` | send (ready screen); next step; in live mode, skip ahead |
+| `←` | previous step (pauses live mode) |
+| `P` | pause or resume (live) |
+| `L` | show or hide the live log (live) |
+| `S` | a live take went wrong: continue from recorded data (live) |
+| `R` | back to the ready screen |
+
+Three attestors are drawn per chain for illustration; the PoC runs one per chain
+at threshold 1. Design:
+[docs/superpowers/specs/2026-09-25-demo-ui-design.md](docs/superpowers/specs/2026-09-25-demo-ui-design.md).
+
+## Other commands
+
+| Command | |
+|---|---|
+| `make status` | what is running; gas and ZPOC balances on both chains |
+| `make logs` | follow the relayer log |
+| `make return` | send 10 ZPOC back, Zenith → Besu (relayed by hand; see [Known limits](#known-limits)) |
+| `make ui` | the demo UI with recorded data, <http://localhost:5173> |
+| `make down` | stop the relayer and the local chain |
+| `make up && make relayer` | bring it back after a reboot or `make down`, without redeploying |
+| `make fund` | top up ZTH gas on Zenith from the faucet |
+| `make clean` | full reset: deletes the local chain, logs, and this PoC's IBC home (`~/.ibc-zpoc`) |
+| `make screenshot` | re-capture the Canton explorer image in [Architecture](#architecture) |
 
 `make up` is safe to re-run and skips a faucet claim when the accounts already
-hold gas. `make demo` is idempotent enough to re-run after a failure.
+hold gas. `make demo` is safe to re-run after a failure.
 
-Also available: `make status` (what is running, balances on both chains),
-`make logs` (tail the relayer), `make clean` (full reset, including this PoC's
-IBC home).
+**Start fresh**, for example when the demo UI says the contracts are missing on
+Zenith (the testnet has been reset):
 
-Expected finish: a packet out and a packet back.
-
+```bash
+cp -a ~/.ibc-zpoc ~/.ibc-zpoc.bak    # keep the old keys, just in case
+make clean && make up && make demo
 ```
-ok  packet SUCCEEDED                 # Besu -> Zenith, auto-relayed
-ok  return packet SUCCEEDED — full round trip   # Zenith -> Besu, relayed by hand
-```
+
+For screenshots of the UI, `?step=N&journey=forward|return` opens a recorded
+step directly, and `demo-ui/scripts/shot.sh` captures it at 1920×1080.
 
 ## Isolation
 
@@ -115,7 +177,7 @@ enabled on a chain without one, so it is on the Besu end only.
 
 That costs automation, not capability. `ibc relayer relay --chain-id 936485
 --tx-hash <send>` names the source transaction explicitly, and the same
-pipeline carries the packet. `make demo` does this and completes the round
+pipeline carries the packet. `make return` does this and completes the round
 trip. A Zenith WebSocket would remove the extra call; nothing else is missing.
 
 **Relay the return leg promptly.** A packet's timeout defaults to 15 minutes
@@ -125,27 +187,12 @@ chain. Both paths were exercised here — see [RESULTS.md](RESULTS.md). Tokens
 are never lost, but a send that is never relayed at all stays burned until
 someone runs the command.
 
-**Everything is a demo trust set.** One attestor per chain, threshold 1, keys
-generated locally with no ceremony, and a single-validator Besu chain. Read the
-trust model before quoting any of this.
-
-**Zenith testnet is a dependency we do not control.** It is operated by a
-seed-stage company, and we have no read on its uptime or reset policy. Treat
-this as reproducible on demand, not as a demo that stays live.
-
-## Reaching Canton
-
-`external_call()` runs Daml → EVM only, so a Solidity contract on Zenith cannot
-call into Daml: reaching a CIP-56 asset needs Daml templates plus a relayer that
-speaks the Canton ledger API.
-See the [design doc](docs/2026-09-24-besu-zenith-ibc-design.md#reaching-canton)
-for what that would take.
 
 ## Layout
 
 ```
-Makefile                 the three commands
-docker-compose.yml       the local Besu container
+Makefile                 the command surface (make help)
+docker-compose.yml       the local Besu containers
 chains/                  besu.toml + genesis templates; chains/local is generated
 scripts/
   env.sh                 shared config: endpoints, ports, helpers
@@ -154,9 +201,15 @@ scripts/
   deploy.sh              register chains, deploy core/client/gmp/ift, link tokens
   configure.sh           render relayer config, disable Zenith auto-relay, validate
   relayer.sh             start | stop | status
-  transfer.sh            mint, send, wait, report; then the return leg
+  transfer.sh            mint, send, wait, report
+  return.sh              the return leg, relayed by hand
   status.sh              what is running and where the tokens are
   screenshot.sh          re-capture the Canton linkage image (make screenshot)
+demo-ui/                 the demo UI: Vite + TypeScript page, live server in server/
 docs/                    design spec, measured Zenith facts, img/
 RESULTS.md               the run: transaction hashes, balances, Canton linkage
 ```
+
+## Trademarks
+
+Canton is a registered trademark of Digital Asset (Switzerland) GmbH. Digital Asset is not affiliated with, and has not sponsored or endorsed, this offering.

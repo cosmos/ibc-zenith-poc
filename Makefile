@@ -8,16 +8,20 @@
 SHELL := /bin/bash
 S     := scripts
 
-.PHONY: help up fund demo deploy configure relayer transfer status logs screenshot down clean
+.PHONY: help up fund demo deploy configure relayer transfer return status logs screenshot ui ui-live down clean
 
 help:
 	@echo "make up      start local Besu and fund the Zenith accounts"
 	@echo "make demo    deploy IBC on both chains, start the relayer, transfer a token"
 	@echo "make down    stop the local chain and the relayer"
 	@echo ""
+	@echo "make return  send 10 ZPOC back, Zenith -> Besu"
 	@echo "make status  what is running, balances on both chains"
 	@echo "make logs    tail the relayer log"
 	@echo "make clean   down, plus delete chain data and the IBC home"
+	@echo ""
+	@echo "make ui      packet-journey demo UI, scripted (http://localhost:5173)"
+	@echo "make ui-live demo UI driving the real PoC (http://localhost:3200/?live)"
 
 up:
 	@bash $(S)/setup-besu.sh
@@ -41,6 +45,11 @@ relayer:
 transfer:
 	@bash $(S)/transfer.sh
 
+# The return leg, Zenith -> Besu. Kept out of `make demo` so a fresh deploy
+# leaves round balances (Besu 90 / Zenith 10).
+return:
+	@bash $(S)/return.sh
+
 status:
 	@bash $(S)/status.sh
 
@@ -50,6 +59,14 @@ logs:
 # Re-capture the Canton linkage image used in the README.
 screenshot:
 	@bash $(S)/screenshot.sh
+
+# Packet-journey UI for the video. Scripted needs nothing running; live needs
+# `make up && make demo` to have succeeded.
+ui:
+	@cd demo-ui && npm install --silent && npm run dev
+
+ui-live:
+	@cd demo-ui && npm install --silent && npm run build && npm run live
 
 down:
 	@bash $(S)/relayer.sh stop

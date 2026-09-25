@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Packet Journey</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="stage">
+    <div class="topbar">
+      <div class="chain-head left">
+        <div class="chain-name">Besu</div>
+        <div class="chain-tag">powered chains &amp; deployments</div>
+      </div>
+      <div class="balances">
+      <div class="bal besu"><i class="dot"></i><span class="who">Besu</span><span class="amt" id="bal-b">0</span><span class="unit">ZPOC</span><span class="delta" id="d-b"></span></div>
+      <div class="link"><div>⇄ <b>IBC</b> ⇄</div><div class="link-tag">Interchain Fungible Tokens</div></div>
+      <div class="bal zen"><i class="dot"></i><span class="who">Canton</span><span class="amt" id="bal-z">0</span><span class="unit">ZPOC</span><span class="delta" id="d-z"></span></div>
+      </div>
+      <div class="chain-head right">
+        <div class="chain-name"><img src="canton-logo-white.svg" alt="Canton"><span>EVM</span></div>
+        <div class="chain-tag">powered by Zenith</div>
+      </div>
+    </div>
+    <div id="diagram"></div>
+    <div class="card packet" id="packet"></div>
+    <div class="card canton" id="canton"></div>
+    <div class="card logpanel" id="log"></div>
+    <div class="caption" id="caption">
+      <div class="stepnum" id="stepnum">00</div>
+      <div class="cap-text">
+        <div class="phase" id="phase"></div>
+        <div class="cap-title" id="cap-title"></div>
+        <div class="cap-body" id="cap-body"></div>
+      </div>
+      <div class="progress" id="progress"></div>
+      <div class="status" id="status"></div>
+      <div class="keys" id="keys"></div>
+    </div>
+    <div class="footer">Canton is a registered trademark of Digital Asset (Switzerland) GmbH. Digital Asset is not affiliated with, and has not sponsored or endorsed, this offering.</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

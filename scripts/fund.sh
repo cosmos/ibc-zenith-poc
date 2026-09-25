@@ -23,6 +23,13 @@ for k in deployer relayer; do
            -H 'Content-Type: application/json' -d "{\"address\":\"$a\"}")
   if echo "$resp" | jq -e '.ok == true' >/dev/null 2>&1; then
     ok "sent $(echo "$resp" | jq -r '.zthAmount') ZTH, tx $(echo "$resp" | jq -r '.zthTxHash')"
+    # The faucet answers before its transfer is in a block. Wait for it, or
+    # `make demo`'s preflight can run first and see 0 ZTH.
+    for i in $(seq 1 12); do
+      bal=$(balance "$ZENITH_RPC" "$a")
+      (( $(python3 -c "print(1 if $bal >= $MIN_ZTH else 0)") )) && break
+      sleep 5
+    done
   else
     warn "faucet declined: $resp"
     warn "claim manually at $ZENITH_EXPLORER/faucet for $a"

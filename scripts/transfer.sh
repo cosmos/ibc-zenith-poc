@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Mint on Besu, send an IFT transfer over IBC to Zenith, wait for the packet to
-# land, and print balances on both sides. Then attempt the return leg.
+# land, and print balances on both sides. Leaves Besu 90 / Zenith 10 on a fresh
+# deploy. The return leg is scripts/return.sh (make return).
 #
 # Requires the relayer to be running (make relayer, or make demo).
 
@@ -59,36 +60,6 @@ else
 fi
 ibc relayer packets --chain-id "$A" --tx-hash "$TX" | jq '.packets[0]'
 show_balances
-
-# --- Zenith -> Besu -----------------------------------------------------------
-# Auto-relay is off on the Zenith end because Zenith publishes no websocket, so
-# no watcher fires on this send. The websocket only drives automatic discovery,
-# though — `relayer relay` names the source transaction explicitly and the same
-# pipeline carries the packet. One extra command, and the round trip completes.
-#
-# Trigger it promptly: the packet's timeout defaults to 15 minutes from the
-# send, and a relay after that window carries a timeout-and-refund instead of a
-# delivery (which also works, and returns the tokens on the source chain).
-
-say "Return leg: Zenith $B -> Besu $A"
-TX_R=$(ibc tx ift send --chain "$B" --ift "$IFT_B" --client-id "$CLIENT_ID" \
-        --to deployer --from deployer --amount 2000000000000000000 | jq -r '.txHash' 2>/dev/null || true)
-if [[ "$TX_R" == 0x* ]]; then
-  ok "return send tx $TX_R"
-  sleep 8   # let the send land before asking the relayer to read it
-  say "Triggering the relay by hand (no websocket on the Zenith end)"
-  ibc relayer relay --chain-id "$B" --tx-hash "$TX_R" | head -12
-  STATE_R=$(wait_packet "$B" "$TX_R")
-  if [[ "$STATE_R" == "PACKET_STATE_SUCCEEDED" ]]; then
-    ok "return packet SUCCEEDED — full round trip"
-  else
-    warn "return packet state: $STATE_R"
-  fi
-  ibc relayer packets --chain-id "$B" --tx-hash "$TX_R" | jq '.packets[0]'
-  show_balances
-else
-  warn "return send did not produce a tx hash"
-fi
 
 echo
 say "Explorer: $ZENITH_EXPLORER/tx/$TX"
